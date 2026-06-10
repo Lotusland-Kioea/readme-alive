@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://readme-alive.dev/agent-a-output.schema.json",
+  "$defs": {
+    "directoryTreeNode": {
+      "type": "object",
+      "description": "目录树节点（递归结构）",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "enum": ["directory", "file"] },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/directoryTreeNode" }
+        },
+        "note": { "type": "string", "description": "目录/文件的简短说明" }
+      }
+    }
+  },
+  "title": "Agent A 代码扫描输出",
+  "description": "Phase 1 Agent A（代码全景扫描）输出的标准化 JSON 结构。Tier 2 下多个 Agent A 的输出按此 schema 合并去重。",
+  "type": "object",
+  "required": ["projectProfile", "dependencies", "interfaces", "configurations", "modules"],
+  "properties": {
+    "projectProfile": {
+      "type": "object",
+      "description": "项目基本画像",
+      "required": ["languages", "projectType", "buildTools"],
+      "properties": {
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "检测到的编程语言列表"
+        },
+        "projectType": {
+          "type": "string",
+          "enum": ["web-app", "library", "cli-tool", "monorepo", "unknown"],
+          "description": "项目类型"
+        },
+        "buildTools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "构建工具列表（如 maven, gradle, npm, cargo 等）"
+        },
+        "frameworkHints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "检测到的框架线索（如 spring-boot, fastapi, gin, axum 等）"
+        },
+        "entryFiles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "入口文件列表（相对项目根目录的路径）"
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "提取的依赖清单",
+      "items": {
+        "type": "object",
+        "required": ["name", "version"],
+        "properties": {
+          "name": { "type": "string", "description": "依赖名。Java: groupId:artifactId, npm: package-name, Python: package-name, Go: module-path, Rust: crate-name" },
+          "version": { "type": "string", "description": "版本号，尽量解析为具体版本而非范围表达式" },
+          "source": {
+            "type": "string",
+            "enum": ["runtime", "dev", "build", "optional", "bom-managed"],
+            "description": "依赖来源类型"
+          },
+          "isDirect": { "type": "boolean", "description": "是否为直接依赖（非传递依赖）" },
+          "scope": { "type": "string", "description": "作用域（如 Maven scope, Cargo features）" }
+        }
+      }
+    },
+    "interfaces": {
+      "type": "array",
+      "description": "对外接口清单（API 端点、CLI 子命令、库导出符号）",
+      "items": {
+        "type": "object",
+        "required": ["type", "signature"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["http-endpoint", "cli-command", "exported-function", "exported-class", "grpc-method", "websocket", "graphql-query", "graphql-mutation", "sse-endpoint", "message-queue-consumer", "scheduled-task", "grpc-server-streaming", "grpc-client-streaming", "grpc-bidirectional-streaming"],
+            "description": "接口类型"
+          },
+          "signature": { "type": "string", "description": "接口签名。HTTP: GET /api/users/:id, CLI: app serve --port" },
+          "canonicalForm": {
+            "type": "string",
+            "description": "规范化接口签名，用于与 Agent B 的 canonicalForm 做精确字符串相等性比较。HTTP端点格式：METHOD /path（如 GET /api/users/:id），CLI命令格式：app command --flag（按字母序排列标志）。路径参数统一为 :param 格式，去除冗余空格"
+          },
+          "method": { "type": "string", "description": "HTTP 方法（GET/POST/PUT/DELETE/PATCH），仅 http-endpoint 类型" },
+          "path": { "type": "string", "description": "URL 路径或 CLI 子命令名" },
+          "parameters": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "参数列表（路径参数、查询参数、CLI 选项等）"
+          },
+          "returnType": { "type": "string", "description": "返回类型" },
+          "description": { "type": "string", "description": "接口描述（从注释/Javadoc/docstring 提取）" },
+          "sourceFile": { "type": "string", "description": "定义该接口的源文件路径" },
+          "sourceLine": { "type": "integer", "minimum": 1, "description": "定义该接口的源文件行号" },
+          "deprecated": { "type": "boolean", "description": "是否标记为废弃" },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "接口提取的置信度。high=精确匹配（如注解/装饰器提取），medium=启发式匹配，low=推断/猜测"
+          }
+        }
+      }
+    },
+    "configurations": {
+      "type": "array",
+      "description": "配置项清单",
+      "items": {
+        "type": "object",
+        "required": ["key", "source"],
+        "properties": {
+          "key": { "type": "string", "description": "配置项键名（如 server.port, DATABASE_URL）" },
+          "defaultValue": { "type": "string", "description": "默认值" },
+          "source": {
+            "type": "string",
+            "enum": ["yaml-properties", "env-file", "env-var-code", "annotation", "config-class", "viper", "clap-attr"],
+            "description": "配置项来源类型"
+          },
+          "sourceFile": { "type": "string", "description": "定义该配置项的源文件路径" },
+          "required": { "type": "boolean", "description": "是否为必需配置项" },
+          "profile": { "type": "string", "description": "所属 profile/environment（如 dev, prod）" }
+        }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "description": "模块/包清单",
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "properties": {
+          "name": { "type": "string", "description": "模块名（Maven artifactId, npm package name, Cargo crate name, Go module path 等）" },
+          "path": { "type": "string", "description": "模块目录（相对项目根目录）" },
+          "type": {
+            "type": "string",
+            "enum": ["main", "lib", "test", "resource", "config", "docs"],
+            "description": "模块类型"
+          },
+          "fileCount": { "type": "integer", "minimum": 0, "description": "模块内源码文件数" },
+          "subModules": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "子模块名列表"
+          }
+        }
+      }
+    },
+    "directoryTree": {
+      "type": "string",
+      "description": "项目目录树（树形文本，排除 node_modules/.git 等，深度限制 3-4 层）"
+    },
+    "directoryTreeStructure": {
+      "$ref": "#/$defs/directoryTreeNode",
+      "description": "结构化目录树（可选，用于程序化消费）"
+    },
+    "scanMetadata": {
+      "type": "object",
+      "description": "扫描元数据",
+      "properties": {
+        "scannerAgentId": { "type": "string", "description": "Agent 标识（Tier 2 扇出时用于区分不同子 Agent）" },
+        "scannedPaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "本 Agent 负责扫描的路径范围"
+        },
+        "filesScanned": { "type": "integer", "minimum": 0 },
+        "excludedCount": { "type": "integer", "minimum": 0, "description": "被排除的文件/目录数" },
+        "languagesDetected": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "scannersLoaded": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "加载的 scanner 规则文件列表"
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "扫描过程中的警告（如文件过大跳过、解析失败等）"
+        }
+      }
+    }
+  }
+}

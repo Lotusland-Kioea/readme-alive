@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://readme-alive.dev/audit-report.schema.json",
+  "title": "readme-alive 审计报告",
+  "description": "readme-alive skill 和 CLI 共用的标准化审计报告格式",
+  "type": "object",
+  "required": ["metadata", "findings", "summary"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["timestamp", "tier", "mode", "projectName"],
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "审计执行时间，ISO 8601 格式"
+        },
+        "tier": {
+          "type": "integer",
+          "enum": [0, 1, 2],
+          "description": "使用的 Agent Tier 级别"
+        },
+        "tierReason": {
+          "type": "string",
+          "description": "Tier 选择原因，格式：<source>→<decision-trace>→<finalTier>: <reason>。如 auto→Tier1→runtime-upgrade→Tier2: 实际源码623文件，Phase 0低估"
+        },
+        "tierReasonBrief": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "tierReason 的终端展示精简版（≤80 字符），如 'Tier 2 [auto→T2→B超时降级T1]'"
+        },
+        "snapshotStatus": {
+          "type": ["string", "null"],
+          "enum": ["healthy", "first-run", "degraded-full-corrupt", "degraded-full-missing", "none", null],
+          "description": "非 Git 环境的快照状态。Git 环境下为 null"
+        },
+        "initialComplexity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Phase 0 初始复杂度评分（运行时修正前）"
+        },
+        "adjustedComplexity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "最终复杂度评分（经运行时修正后。如无修正，此值等于 initialComplexity）"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["incremental", "full"],
+          "description": "扫描模式"
+        },
+        "projectName": {
+          "type": "string",
+          "description": "项目名称（从 package.json/pom.xml 等提取）"
+        },
+        "projectType": {
+          "type": "string",
+          "enum": ["web-app", "library", "cli-tool", "monorepo", "unknown"],
+          "description": "检测到的项目类型"
+        },
+        "reportType": {
+          "type": "string",
+          "enum": ["diff", "greenfield-enum"],
+          "description": "报告类型：diff=差异报告（有 README 基准），greenfield-enum=正向枚举报告（无 README 基准）"
+        },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "检测到的编程语言列表"
+        },
+        "filesScanned": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "实际扫描的文件数"
+        },
+        "filesTotal": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "项目总文件数"
+        },
+        "tokensConsumed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Token 消耗估算"
+        },
+        "scannersLoaded": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "加载的 scanner 规则文件列表"
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "dimension", "title", "description"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "info"],
+            "description": "严重度级别"
+          },
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "依赖版本准确性",
+              "API 端点准确性",
+              "命令可执行性",
+              "链接有效性",
+              "模块覆盖",
+              "依赖覆盖",
+              "配置覆盖",
+              "README 过短",
+              "缺少关键章节",
+              "内容归属不当",
+              "README 过长",
+              "缺少徽章",
+              "对外接口路径",
+              "接口请求/响应格式",
+              "端口/启动配置",
+              "前端路由",
+              "子命令列表",
+              "选项/参数",
+              "安装命令",
+              "使用示例输出",
+              "公共导出签名",
+              "安装指令",
+              "最低版本要求",
+              "类型定义",
+              "子包 README",
+              "子包链接",
+              "统一技术栈",
+              "导航结构"
+            ],
+            "description": "审计维度，对应 audit-dimensions.md 中定义的维度名称。通用维度 12 个 + 按项目类型的特殊维度 4×4=16 个"
+          },
+          "title": {
+            "type": "string",
+            "description": "问题标题"
+          },
+          "description": {
+            "type": "string",
+            "description": "详细描述（README 声称什么 vs 代码实际是什么）"
+          },
+          "readmeLocation": {
+            "type": "string",
+            "description": "README 中的位置（章节名或行号）"
+          },
+          "codeLocation": {
+            "type": "string",
+            "description": "代码中的对应位置（文件路径）"
+          },
+          "suggestedAction": {
+            "type": "string",
+            "description": "建议操作"
+          },
+          "autoFixable": {
+            "type": "boolean",
+            "description": "是否可通过 --fix 自动修复"
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "description": "覆盖率统计",
+      "properties": {
+        "modulesTotal": { "type": "integer", "minimum": 0 },
+        "modulesCovered": { "type": "integer", "minimum": 0 },
+        "apisTotal": { "type": "integer", "minimum": 0 },
+        "apisCovered": { "type": "integer", "minimum": 0 },
+        "configsTotal": { "type": "integer", "minimum": 0 },
+        "configsCovered": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "readmeHealth": {
+      "type": "object",
+      "description": "README 健康度评估",
+      "properties": {
+        "lineCount": { "type": "integer" },
+        "expectedRange": {
+          "type": "object",
+          "properties": {
+            "min": { "type": "integer" },
+            "max": { "type": "integer" }
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["too-short", "healthy", "too-long"],
+          "description": "相对合理范围的评估"
+        },
+        "hasAnchors": {
+          "type": "boolean",
+          "description": "DEPRECATED: 旧版锚点系统残留字段，v1.0 已迁移至段落检测（section-detection.md）。计划在 v1.1 中移除。保留仅为向后兼容，新实现不应写入。",
+          "x-deprecated": true,
+          "x-deprecated-since": "v1.0.0",
+          "x-deprecated-replacedBy": "段落检测系统（section-detection.md）"
+        },
+        "anchorCount": {
+          "type": "integer",
+          "description": "DEPRECATED: 随 hasAnchors 废弃。计划在 v1.1 中移除。保留仅为向后兼容。",
+          "x-deprecated": true,
+          "x-deprecated-since": "v1.0.0",
+          "x-deprecated-replacedBy": "段落检测系统（section-detection.md）"
+        },
+        "missingStandardSections": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["critical", "warning", "info"],
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "warning": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 },
+        "autoFixable": { "type": "integer", "minimum": 0 },
+        "readmeStatus": {
+          "type": "string",
+          "enum": ["absent", "parsed", "timeout-fallback", "too-large"],
+          "description": "README 解析状态：absent=不存在，parsed=正常解析，timeout-fallback=Agent B 超时降级，too-large=README 过大被分块处理"
+        },
+        "fallbackNote": {
+          "type": "string",
+          "description": "如有降级，说明降级原因"
+        }
+      }
+    }
+  }
+}

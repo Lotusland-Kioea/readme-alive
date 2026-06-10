@@ -1,0 +1,231 @@
+# readme-alive GitHub Action
+# 在 PR 中自动检查 README 与代码的一致性
+# 将此文件复制到 .github/workflows/readme-alive.yml
+#
+# ⚠️ 安全提示：此 workflow 生成的评论可能包含项目路径信息。
+# audit 报告中的 codeLocation 字段已被自动脱敏处理（绝对路径替换为相对路径或 <project>/...）。
+
+name: README Alive Check
+
+on:
+  pull_request:
+    paths:
+      # 代码变更触发
+      - '**.java'
+      - '**.py'
+      - '**.go'
+      - '**.rs'
+      - '**.js'
+      - '**.ts'
+      - '**.jsx'
+      - '**.tsx'
+      - 'pom.xml'
+      - 'build.gradle'
+      - 'build.gradle.kts'
+      - 'settings.gradle'
+      - 'settings.gradle.kts'
+      - 'package.json'
+      - 'go.mod'
+      - 'Cargo.toml'
+      - 'pyproject.toml'
+      - 'application*.yml'
+      - 'application*.yaml'
+      - '.env.example'
+      - 'docker-compose.yml'
+      - 'docker-compose.yaml'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'tsconfig.json'
+      - '*.mjs'
+      - '*.cjs'
+      - '*.sh'
+      - '*.bash'
+      - '*.properties'
+      # README 自身变更也触发
+      - 'README.md'
+      - '**/README.md'
+
+  schedule:
+    # 每周一 08:00 UTC 全量检查
+    - cron: '0 8 * * 1'
+
+jobs:
+  check-readme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: README Consistency Check
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 需要 git 历史用于增量扫描
+
+      - name: Check for skip marker
+        id: check-skip
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            const body = pr.body || '';
+            if (body.includes('<!-- readme-alive:skip -->')) {
+              core.setOutput('skip', 'true');
+            } else {
+              core.setOutput('skip', 'false');
+            }
+
+      - name: Run readme-alive check
+        id: check
+        if: steps.check-skip.outputs.skip != 'true'
+        continue-on-error: true
+        run: |
+          bash .claude/skills/readme-alive/cli/readme-alive.sh \
+            --ci \
+            --verbose \
+            --format json > readme-alive-report.txt 2>&1
+        env:
+          README_PATH: README.md
+
+      - name: Comment PR — Critical Issues
+        if: steps.check.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('readme-alive-report.txt', 'utf8');
+
+            // 脱敏：移除绝对路径前缀
+            const sanitized = report
+              .replace(/\/home\/runner\/work\/[^\/]+\/[^\/]+\//g, '<project>/')
+              .replace(/\/github\/workspace\//g, '<project>/')
+              .replace(/\/home\/[^\/]+\//g, '~/');
+
+            const body = `## ⚠️ README 可能与代码不一致
+
+            readme-alive 在本次 PR 的变更中检测到以下问题：
+
+            \`\`\`
+            ${sanitized.slice(0, 2000)}
+            \`\`\`
+
+            > 请运行 \`/readme-alive\`（Claude Code）或 \`./cli/readme-alive.sh --verbose\` 查看完整报告。
+            > 如果是误报，请在 PR 描述中添加 \`<!-- readme-alive:skip -->\` 跳过检查。
+            `;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+            // 为 PR 添加诊断标签
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['readme-alive:needs-update']
+            });
+
+      - name: Comment PR — Info
+        if: steps.check.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('readme-alive-report.txt', 'utf8');
+
+            // 脱敏：移除绝对路径前缀
+            const sanitized = report
+              .replace(/\/home\/runner\/work\/[^\/]+\/[^\/]+\//g, '<project>/')
+              .replace(/\/github\/workspace\//g, '<project>/')
+              .replace(/\/home\/[^\/]+\//g, '~/');
+
+            if (sanitized.includes('[Info]') || sanitized.includes('[Warning]')) {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 📝 README 建议\n\nreadme-alive 检测到一些改进建议：\n\n\`\`\`\n${sanitized.slice(0, 1500)}\n\`\`\``
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## ✅ README 检查通过\n\nreadme-alive 未检测到一致性问题。`
+              });
+            }
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: readme-alive-report
+          path: readme-alive-report.txt
+
+  # 可选：定时全量检查（每周一次）
+  scheduled-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'schedule'
+    name: Weekly Full README Audit
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run full README audit
+        id: check
+        continue-on-error: true
+        run: |
+          bash .claude/skills/readme-alive/cli/readme-alive.sh \
+            --ci \
+            --check all \
+            --verbose > readme-alive-weekly.txt 2>&1
+        env:
+          README_PATH: README.md
+
+      - name: Create issue if problems found
+        if: steps.check.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('readme-alive-weekly.txt', 'utf8');
+
+            // 脱敏：移除绝对路径前缀
+            const sanitized = report
+              .replace(/\/home\/runner\/work\/[^\/]+\/[^\/]+\//g, '<project>/')
+              .replace(/\/github\/workspace\//g, '<project>/')
+              .replace(/\/home\/[^\/]+\//g, '~/');
+
+            // 搜索现有 open 周检 issue（去重）
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'readme-alive,weekly-report'
+            });
+
+            if (issues.length > 0) {
+              // 已存在周检 issue，追加评论而非新建
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues[0].number,
+                body: `## 📋 本周审计报告\n\n\`\`\`\n${sanitized.slice(0, 3000)}\n\`\`\`\n\n> 自动生成 by readme-alive`
+              });
+            } else {
+              // 不存在周检 issue，创建新的
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '📋 readme-alive 周检报告 — README 需要更新',
+                body: `本周自动审计发现了以下问题：\n\n\`\`\`\n${sanitized.slice(0, 3000)}\n\`\`\`\n\n> 自动生成 by readme-alive`,
+                labels: ['readme-alive', 'weekly-report']
+              });
+            }

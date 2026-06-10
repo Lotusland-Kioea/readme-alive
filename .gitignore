@@ -1,0 +1,13 @@
+# readme-alive
+
+# 备份与快照
+*.backup
+*.tmp
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

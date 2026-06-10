@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://readme-alive.dev/agent-b-output.schema.json",
+  "title": "Agent B README 解析输出",
+  "description": "Phase 1 Agent B（README 解析）输出的标准化 JSON 结构。README 不存在时 Agent B 跳过，不产生输出。",
+  "type": "object",
+  "required": ["headingTree", "declaredSections", "declaredTechStack", "declaredFiles", "declaredInterfaces", "declaredCommands"],
+  "properties": {
+    "headingTree": {
+      "type": "array",
+      "description": "README 的标题树（H1-H3）",
+      "items": {
+        "type": "object",
+        "required": ["level", "text", "lineNumber"],
+        "properties": {
+          "level": { "type": "integer", "enum": [1, 2, 3], "description": "标题层级" },
+          "text": { "type": "string", "description": "标题文本（含 emoji）" },
+          "lineNumber": { "type": "integer", "minimum": 1 },
+          "matchedSectionType": {
+            "type": ["string", "null"],
+            "enum": ["tech-stack", "project-structure", "interface-overview", "quick-start", "config-reference"],
+            "description": "段落检测匹配到的类型，未匹配时显式设为 null"
+          },
+          "childHeadings": {
+            "type": "array",
+            "items": { "$ref": "#" },
+            "description": "子标题（递归结构）"
+          }
+        }
+      }
+    },
+    "declaredSections": {
+      "type": "array",
+      "description": "README 中已存在的章节类型",
+      "items": {
+        "type": "object",
+        "required": ["sectionType", "headingText", "startLine", "endLine"],
+        "properties": {
+          "sectionType": {
+            "type": "string",
+            "enum": ["tech-stack", "project-structure", "interface-overview", "quick-start", "config-reference", "license", "contributing", "features", "unknown"],
+            "description": "段落检测匹配到的类型"
+          },
+          "headingText": { "type": "string" },
+          "headingLevel": { "type": "integer", "enum": [1, 2, 3] },
+          "startLine": { "type": "integer", "minimum": 1 },
+          "endLine": { "type": "integer", "minimum": 1 },
+          "hasTable": { "type": "boolean", "description": "段落内是否含表格" },
+          "hasCodeBlock": { "type": "boolean", "description": "段落内是否含代码块" },
+          "hasTreeView": { "type": "boolean", "description": "段落内是否含目录树（├── 等）" },
+          "isAutoMaintainable": { "type": "boolean", "description": "此段落的内容是否可由 --fix 自动维护" }
+        }
+      }
+    },
+    "declaredTechStack": {
+      "type": "array",
+      "description": "README 中声明的技术栈",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "技术/依赖名称" },
+          "version": { "type": "string", "description": "README 中声明的版本（可能为范围或模糊版本）" },
+          "readmeLine": { "type": "integer", "minimum": 1, "description": "在 README 中的行号" }
+        }
+      }
+    },
+    "declaredFiles": {
+      "type": "array",
+      "description": "README 中引用的文件/目录路径",
+      "items": {
+        "type": "object",
+        "required": ["path", "readmeLine"],
+        "properties": {
+          "path": { "type": "string", "description": "引用的路径（相对项目根目录）" },
+          "isDirectory": { "type": "boolean", "description": "是否指向目录" },
+          "readmeLine": { "type": "integer", "minimum": 1 },
+          "exists": { "type": "boolean", "description": "路径是否实际存在" }
+        }
+      }
+    },
+    "declaredInterfaces": {
+      "type": "array",
+      "description": "README 中描述的接口（API 端点/CLI 命令/库导出）",
+      "items": {
+        "type": "object",
+        "required": ["description", "readmeLine"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["http-endpoint", "cli-command", "exported-function", "exported-class", "unknown"],
+            "description": "推断的接口类型"
+          },
+          "signature": { "type": "string", "description": "README 中描述的接口签名" },
+          "canonicalForm": {
+            "type": "string",
+            "description": "规范化接口签名，用于与 Agent A 的 canonicalForm 做精确字符串相等性比较。HTTP端点格式：METHOD /path（如 GET /api/users/:id），CLI命令格式：app command --flag（按字母序排列标志）。路径参数统一为 :param 格式，去除冗余空格"
+          },
+          "description": { "type": "string" },
+          "readmeLine": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "declaredCommands": {
+      "type": "array",
+      "description": "README 中的可执行命令（安装/启动/测试等）",
+      "items": {
+        "type": "object",
+        "required": ["command", "readmeLine", "purpose"],
+        "properties": {
+          "command": { "type": "string", "description": "完整命令文本" },
+          "readmeLine": { "type": "integer", "minimum": 1 },
+          "purpose": {
+            "type": "string",
+            "enum": ["install", "start", "build", "test", "configure", "deploy", "dev", "unknown"],
+            "description": "命令用途"
+          },
+          "languageLabel": { "type": "string", "description": "代码块语言标签（如 bash, sh, shell）" }
+        }
+      }
+    },
+    "internalLinks": {
+      "type": "array",
+      "description": "README 中的内部链接（相对路径，非 http）",
+      "items": {
+        "type": "object",
+        "required": ["url", "readmeLine"],
+        "properties": {
+          "url": { "type": "string", "description": "链接目标" },
+          "text": { "type": "string", "description": "链接文本" },
+          "readmeLine": { "type": "integer", "minimum": 1 },
+          "isValid": { "type": "boolean", "description": "链接目标是否可达" }
+        }
+      }
+    },
+    "styleProfile": {
+      "type": "object",
+      "description": "README 排版风格嗅探结果",
+      "properties": {
+        "primaryLanguage": {
+          "type": "string",
+          "$comment": "德语通过默认英文关键词 fallback + .readme-alive-keywords.json 自定义关键词支持",
+          "enum": ["zh", "en", "ja", "ko", "fr", "de", "other"],
+          "description": "README 正文主要语言。de（德语）通过默认英文关键词 fallback + .readme-alive-keywords.json 自定义关键词支持"
+        },
+        "headingEmojis": {
+          "type": "object",
+          "description": "各章节标题使用的 emoji（sectionType → emoji 映射）",
+          "additionalProperties": { "type": "string" }
+        },
+        "tableStyle": {
+          "type": "object",
+          "properties": {
+            "columnCount": { "type": "integer", "minimum": 1 },
+            "alignments": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["left", "center", "right"] }
+            },
+            "headerLanguage": { "type": "string" }
+          }
+        },
+        "codeBlockLanguage": { "type": "string", "description": "主要使用的代码块语言标签" },
+        "treePrefixStyle": {
+          "type": "string",
+          "enum": ["box-drawing", "indent-only", "mixed"],
+          "description": "目录树前缀风格"
+        },
+        "indentWidth": { "type": "integer", "minimum": 1, "maximum": 8, "description": "缩进宽度" }
+      }
+    },
+    "parseMetadata": {
+      "type": "object",
+      "description": "解析元数据",
+      "properties": {
+        "totalLines": { "type": "integer", "minimum": 0 },
+        "h1Count": { "type": "integer", "minimum": 0 },
+        "h2Count": { "type": "integer", "minimum": 0 },
+        "h3Count": { "type": "integer", "minimum": 0 },
+        "tableCount": { "type": "integer", "minimum": 0 },
+        "codeBlockCount": { "type": "integer", "minimum": 0 },
+        "readmeExists": { "type": "boolean" }
+      }
+    }
+  }
+}
