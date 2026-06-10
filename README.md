@@ -188,16 +188,27 @@ readme-alive/
 | Phase 2 | 5 语言全覆盖 + Tier 2 扇出 + Monorepo | ✅ |
 | Phase 3 | --fix 段落识别 + 回滚系统 + CLI 增强 | ✅ |
 | Phase 3.5 | 11 专家审查（架构/安全/5语言/兜底/复杂度/CLI/Schema） | ✅ |
-| Phase 3.6 | 5 scanner 全面增强 + 审查改进阶段（Phase C）P2 改进 | ✅ |
-| Phase 4 | 文档完善 + 社区发布（2026-06-10 审查改进中） | 🔄 |
+| Phase 3.6 | 5 scanner 全面增强 + Phase C P2 改进 | ✅ |
+| Phase 4 | 13 专家企业级审查 + Phase A-D 全面修复 | ✅ |
+| Phase 5 | 社区发布 | ⬜ |
 
-### 审查统计（2026-06-04）
+### 审查统计（2026-06-04，第一轮）
 
 - 11 位专家并行审查：架构设计、安全权限、Java/Python/Go/Rust/Node.js 扫描器、兜底策略、复杂度评估、CLI/CI 双形态、Schema/模板
 - 全量发现：45 Critical + 86 Warning
 - 三轮修复（P0→P1→P2）：全部清零
 
-> **注**：以上为内部审查数据（审查报告存档于项目文档）。2026-06-10 进行了第二轮全量审查（Phase A-D），修复结果见本文档各修复项。
+### 审查统计（2026-06-10，第二轮 — 企业级）
+
+- **13 位企业级专家**并行审查：架构与流程设计、安全与权限边界、5 语言扫描器（Java/Node.js/Python/Go/Rust）、兜底与降级策略、复杂度评估算法、CLI/CI 双形态、Schema/模板/Greenfield、风格继承与段落检测、引用一致性与交叉校验
+- **原始评分**：加权总分 **6.43/10**（仅架构设计 8 分达标）
+- **全量发现**：🔴46 Critical + 🟡92 Warning + 🔵72 Info = **210 项**
+- **Phase A-D 全面修复**（17 Agent 并行）：基础设施安全/CLI 崩溃/Schema 规范化/五语言 Scanner 增强/全局复核
+  - Phase A：7 Agent 修复 CLI/SKILL/README/CI/references（安全列表 35+ 模式、备份原子化、--tier 实现、JSON 输出、复杂度边界对齐等）
+  - Phase B：3 Agent 修复 Schema（canonicalForm 交叉验证、Agent A/B 契约对齐、新增 cross-validation.spec.md）
+  - Phase C：5 Agent 修复五语言 Scanner（Python 补全项目结构章节、Java Maven 两阶段模型、NestJS import 追踪、Gorilla Mux 端点提取、Rocket 两步算法等）
+  - Phase D：全局复核 + 4 项遗留修复（JSON 实际计数、--tier JSON 输出、备份哈希校验、多行 TOML 支持）
+- **修复后预估**：加权总分 **~8.46/10**（待重新审查确认）
 
 ### 审查改进阶段（Phase C = 代码审查驱动的质量改进）关键改进
 
